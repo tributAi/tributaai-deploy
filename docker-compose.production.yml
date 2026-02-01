@@ -284,6 +284,7 @@ services:
     container_name: tributaai-frontend
     environment:
       NODE_ENV: production
+      # Valores em runtime só afetam server-side; o client usa os definidos no build da imagem
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.tributaai.syphertech.com.br}
       NEXT_PUBLIC_REPORT_SERVICE_URL: ${NEXT_PUBLIC_REPORT_SERVICE_URL:-https://reports.tributaai.syphertech.com.br}
     labels:
