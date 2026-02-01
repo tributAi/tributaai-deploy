@@ -1,0 +1,355 @@
+# Docker Compose Produção: Traefik (80/443) + TributAI
+# URLs: https://tributaai-web.syphertech.com.br | https://tributaai-admin.syphertech.com.br
+# Uso: docker compose -f docker-compose.production.yml up -d
+
+services:
+  traefik:
+    image: traefik:v3.6
+    container_name: tributaai-traefik
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=web"
+      - "--providers.docker.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL:-admin@syphertech.com.br}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - web
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=false"
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: tributaai-postgres
+    environment:
+      POSTGRES_DB: tributaai
+      POSTGRES_USER: tributaai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tributaai_dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tributaai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tributaai-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: tributaai-redis
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tributaai-network
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    container_name: tributaai-mongodb
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tributaai-network
+    restart: unless-stopped
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2024-01-04T18-10-45Z
+    container_name: tributaai-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - tributaai-network
+    restart: unless-stopped
+
+  rules-admin-api:
+    image: ghcr.io/tributai/tributaai-rules-admin-api:latest
+    container_name: tributaai-rules-admin-api
+    environment:
+      PORT: "8081"
+      DATABASE_URL: postgres://tributaai:${POSTGRES_PASSWORD:-tributaai_dev}@postgres:5432/tributaai?sslmode=disable
+      REDIS_URL: redis:6379
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      LLM_SERVICE_URL: http://llm-service:8084
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rules-admin.rule=Host(`admin-api.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.rules-admin.entrypoints=websecure"
+      - "traefik.http.routers.rules-admin.tls.certresolver=letsencrypt"
+      - "traefik.http.services.rules-admin.loadbalancer.server.port=8081"
+      - "traefik.http.routers.rules-admin-http.rule=Host(`admin-api.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.rules-admin-http.entrypoints=web"
+      - "traefik.http.routers.rules-admin-http.middlewares=redirect-to-https"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      llm-service:
+        condition: service_started
+    networks:
+      - tributaai-network
+      - web
+    restart: unless-stopped
+
+  rule-engine:
+    image: ghcr.io/tributai/tributaai-rule-engine:latest
+    container_name: tributaai-rule-engine
+    environment:
+      PORT: "8082"
+      DATABASE_URL: postgres://tributaai:${POSTGRES_PASSWORD:-tributaai_dev}@postgres:5432/tributaai?sslmode=disable
+      REDIS_URL: redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tributaai-network
+    restart: unless-stopped
+
+  tax-calculator:
+    image: ghcr.io/tributai/tributaai-tax-calculator:latest
+    container_name: tributaai-tax-calculator
+    environment:
+      PORT: "8083"
+      DATABASE_URL: postgres://tributaai:${POSTGRES_PASSWORD:-tributaai_dev}@postgres:5432/tributaai?sslmode=disable
+      REDIS_URL: redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tributaai-network
+    restart: unless-stopped
+
+  llm-service:
+    image: ghcr.io/tributai/tributaai-llm-service:latest
+    container_name: tributaai-llm-service
+    environment:
+      PORT: "8084"
+      DATABASE_URL: postgres://tributaai:${POSTGRES_PASSWORD:-tributaai_dev}@postgres:5432/tributaai?sslmode=disable
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tributaai-network
+    restart: unless-stopped
+
+  report-service:
+    image: ghcr.io/tributai/tributaai-report-service:latest
+    container_name: tributaai-report-service
+    environment:
+      PORT: "8086"
+      PDF_FONT_DIR: "/root/fonts"
+      DATABASE_URL: postgres://tributaai:${POSTGRES_PASSWORD:-tributaai_dev}@postgres:5432/tributaai?sslmode=disable
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.report-service.rule=Host(`reports.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.report-service.entrypoints=websecure"
+      - "traefik.http.routers.report-service.tls.certresolver=letsencrypt"
+      - "traefik.http.services.report-service.loadbalancer.server.port=8086"
+      - "traefik.http.routers.report-service-http.rule=Host(`reports.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.report-service-http.entrypoints=web"
+      - "traefik.http.routers.report-service-http.middlewares=redirect-to-https"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    networks:
+      - tributaai-network
+      - web
+    restart: unless-stopped
+
+  orchestrator:
+    image: ghcr.io/tributai/tributaai-orchestrator:latest
+    container_name: tributaai-orchestrator
+    environment:
+      PORT: "8085"
+      RULE_ENGINE_URL: http://rule-engine:8082
+      TAX_CALCULATOR_URL: http://tax-calculator:8083
+      LLM_SERVICE_URL: http://llm-service:8084
+      REPORT_SERVICE_URL: http://report-service:8086
+    depends_on:
+      - rule-engine
+      - tax-calculator
+      - llm-service
+      - report-service
+    networks:
+      - tributaai-network
+    restart: unless-stopped
+
+  core-api:
+    image: ghcr.io/tributai/tributaai-core-api:latest
+    container_name: tributaai-core-api
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://tributaai:${POSTGRES_PASSWORD:-tributaai_dev}@postgres:5432/tributaai?sslmode=disable
+      ORCHESTRATOR_URL: http://orchestrator:8085
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.core-api.rule=Host(`api.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.core-api.entrypoints=websecure"
+      - "traefik.http.routers.core-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.core-api.loadbalancer.server.port=8080"
+      - "traefik.http.routers.core-api-http.rule=Host(`api.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.core-api-http.entrypoints=web"
+      - "traefik.http.routers.core-api-http.middlewares=redirect-to-https"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      orchestrator:
+        condition: service_started
+    networks:
+      - tributaai-network
+      - web
+    restart: unless-stopped
+
+  treaty-import:
+    image: ghcr.io/tributai/tributaai-treaty-import:latest
+    container_name: tributaai-treaty-import
+    environment:
+      PORT: "8087"
+      MONGODB_URI: mongodb://mongodb:27017
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      LLM_SERVICE_URL: http://llm-service:8084
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.treaty-import.rule=Host(`treaty.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.treaty-import.entrypoints=websecure"
+      - "traefik.http.routers.treaty-import.tls.certresolver=letsencrypt"
+      - "traefik.http.services.treaty-import.loadbalancer.server.port=8087"
+      - "traefik.http.routers.treaty-import-http.rule=Host(`treaty.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.treaty-import-http.entrypoints=web"
+      - "traefik.http.routers.treaty-import-http.middlewares=redirect-to-https"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      llm-service:
+        condition: service_started
+    networks:
+      - tributaai-network
+      - web
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/tributai/tributaai-frontend:latest
+    container_name: tributaai-frontend
+    environment:
+      NODE_ENV: production
+      # Valores em runtime só afetam server-side; o client usa os definidos no build da imagem
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.tributaai.syphertech.com.br}
+      NEXT_PUBLIC_REPORT_SERVICE_URL: ${NEXT_PUBLIC_REPORT_SERVICE_URL:-https://reports.tributaai.syphertech.com.br}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`tributaai-web.syphertech.com.br`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.frontend-http.rule=Host(`tributaai-web.syphertech.com.br`)"
+      - "traefik.http.routers.frontend-http.entrypoints=web"
+      - "traefik.http.routers.frontend-http.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - core-api
+    networks:
+      - tributaai-network
+      - web
+    restart: unless-stopped
+
+  admin-portal:
+    image: ghcr.io/tributai/tributaai-admin-portal:latest
+    container_name: tributaai-admin-portal
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_ADMIN_API_BASE_URL: ${NEXT_PUBLIC_ADMIN_API_BASE_URL:-https://admin-api.tributaai.syphertech.com.br}
+      NEXT_PUBLIC_TREATY_IMPORT_URL: ${NEXT_PUBLIC_TREATY_IMPORT_URL:-https://treaty.tributaai.syphertech.com.br}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.admin-portal.rule=Host(`tributaai-admin.syphertech.com.br`)"
+      - "traefik.http.routers.admin-portal.entrypoints=websecure"
+      - "traefik.http.routers.admin-portal.tls.certresolver=letsencrypt"
+      - "traefik.http.services.admin-portal.loadbalancer.server.port=3001"
+      - "traefik.http.routers.admin-portal-http.rule=Host(`tributaai-admin.syphertech.com.br`)"
+      - "traefik.http.routers.admin-portal-http.entrypoints=web"
+      - "traefik.http.routers.admin-portal-http.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - rules-admin-api
+    networks:
+      - tributaai-network
+      - web
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  mongodb_data:
+  minio_data:
+  traefik_letsencrypt:
+
+networks:
+  tributaai-network:
+    driver: bridge
+  web:
+    name: web
+    driver: bridge
