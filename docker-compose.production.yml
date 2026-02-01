@@ -79,7 +79,7 @@ services:
     restart: unless-stopped
 
   minio:
-    image: quay.io/minio/minio:RELEASE.2024-01-04T18-10-45Z
+    image: minio/minio:RELEASE.2024-06-28T09-06-49Z
     container_name: tributaai-minio
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -284,7 +284,6 @@ services:
     container_name: tributaai-frontend
     environment:
       NODE_ENV: production
-      # Valores em runtime só afetam server-side; o client usa os definidos no build da imagem
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.tributaai.syphertech.com.br}
       NEXT_PUBLIC_REPORT_SERVICE_URL: ${NEXT_PUBLIC_REPORT_SERVICE_URL:-https://reports.tributaai.syphertech.com.br}
     labels:
