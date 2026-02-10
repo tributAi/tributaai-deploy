@@ -6,9 +6,6 @@ on:
   workflow_dispatch:
 
 env:
-  SSH_HOST: ${{ secrets.SSH_HOST }}
-  SSH_USER: ${{ secrets.SSH_USER }}
-  SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
   REMOTE_DIR: /opt/tributaai
   GHCR_USERNAME: TributAI
 
@@ -16,10 +13,21 @@ jobs:
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Validate secrets
+        run: |
+          missing=""
+          [ -z "${{ secrets.SSH_HOST }}" ] && missing="$missing SSH_HOST"
+          [ -z "${{ secrets.SSH_USER }}" ] && missing="$missing SSH_USER"
+          [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] && missing="$missing SSH_PRIVATE_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secrets:$missing"
+            exit 1
+          fi
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -32,48 +40,64 @@ jobs:
           pip install paramiko
 
       - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ vars.SSH_PORT || '22' }}
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts || true
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           ssh -i ~/.ssh/id_rsa \
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=10 \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
             "echo 'SSH connection test successful'"
 
       - name: Deploy via SSH
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          SSH_PORT: ${{ vars.SSH_PORT || '22' }}
           SSH_KEY_PATH: ~/.ssh/id_rsa
           REMOTE_DIR: /opt/tributaai
           GHCR_USERNAME: TributAI
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          MINIO_ROOT_USER: ${{ secrets.MINIO_ROOT_USER || 'minioadmin' }}
+          MINIO_ROOT_USER: ${{ vars.MINIO_ROOT_USER || 'minioadmin' }}
           MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
           ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL || 'https://api.openai.com/v1' }}
-          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'openai' }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://api.openai.com/v1' }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'openai' }}
         run: |
           python3 deploy/deploy-ssh.py
 
       - name: Verify deployment
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ vars.SSH_PORT || '22' }}
         run: |
           ssh -i ~/.ssh/id_rsa \
             -o StrictHostKeyChecking=no \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
             "cd /opt/tributaai && docker compose -f docker-compose.production.yml ps"
 
       - name: Health check
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ vars.SSH_PORT || '22' }}
         run: |
           ssh -i ~/.ssh/id_rsa \
             -o StrictHostKeyChecking=no \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
             "cd /opt/tributaai && \
              docker compose -f docker-compose.production.yml ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"
