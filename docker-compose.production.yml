@@ -344,7 +344,7 @@ services:
     restart: unless-stopped
 
   sophia-web:
-    image: ghcr.io/tributai/sophia-web:latest
+    image: ghcr.io/tributai/sophia:latest
     container_name: tributaai-sophia-web
     environment:
       NODE_ENV: production
