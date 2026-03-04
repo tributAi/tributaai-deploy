@@ -7,6 +7,7 @@ on:
       - 'docker-compose.production.yml'
       - 'deploy/deploy-ssh.py'
       - '.github/workflows/deploy-ssh.yml'
+      - 'scripts/**'
       - 'infra/postgres/migrations/**'
   workflow_dispatch:
 
@@ -79,6 +80,7 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://api.openai.com/v1' }}
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'openai' }}
+          LETSENCRYPT_EMAIL: ${{ vars.LETSENCRYPT_EMAIL || secrets.LETSENCRYPT_EMAIL }}
         run: |
           python3 deploy/deploy-ssh.py
 
@@ -106,3 +108,18 @@ jobs:
             "$SSH_USER@$SSH_HOST" \
             "cd /opt/tributaai && \
              docker compose -f docker-compose.production.yml ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"
+
+      - name: Diagnose URLs (portas, Traefik, HTTP)
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ vars.SSH_PORT || '22' }}
+        continue-on-error: true
+        run: |
+          echo "Diagnóstico (não bloqueia o deploy). Use esta saída para debug quando as URLs tribxai.com não funcionarem."
+          echo "=== Portas 80/443 ==="
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "ss -tlnp 2>/dev/null | grep -E ':80 |:443 ' || true"
+          echo "=== Últimas 35 linhas Traefik ==="
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "docker logs tributaai-traefik 2>&1 | tail -35"
+          echo "=== Curl local Host:tribxai.com ==="
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "curl -sI -m 5 http://127.0.0.1:80/ -H 'Host: tribxai.com' 2>&1 | head -12"
