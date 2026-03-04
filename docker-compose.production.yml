@@ -16,7 +16,8 @@ services:
       - "--providers.docker.watch=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL:-admin@syphertech.com.br}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
       - "--log.level=INFO"
@@ -281,21 +282,44 @@ services:
       - web
     restart: unless-stopped
 
+  landing:
+    image: ghcr.io/tributai/tribx-landing:latest
+    container_name: tribx-landing
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.landing.rule=Host(`tribxai.com`) || Host(`www.tribxai.com`)"
+      - "traefik.http.routers.landing.entrypoints=websecure"
+      - "traefik.http.routers.landing.tls.certresolver=letsencrypt"
+      - "traefik.http.services.landing.loadbalancer.server.port=3000"
+      - "traefik.http.routers.landing-http.rule=Host(`tribxai.com`) || Host(`www.tribxai.com`)"
+      - "traefik.http.routers.landing-http.entrypoints=web"
+      - "traefik.http.routers.landing-http.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+    healthcheck:
+      test: [ "CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\" || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - web
+    restart: unless-stopped
+
   frontend:
     image: ghcr.io/tributai/tributaai-frontend:latest
     container_name: tributaai-frontend
     environment:
       NODE_ENV: production
-      # Valores em runtime só afetam server-side; o client usa os definidos no build da imagem
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://app.tribxai.com}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.tribxai.com}
       NEXT_PUBLIC_REPORT_SERVICE_URL: ${NEXT_PUBLIC_REPORT_SERVICE_URL:-https://reports.tribxai.com}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`tribxai.com`) || Host(`www.tribxai.com`)"
+      - "traefik.http.routers.frontend.rule=Host(`app.tribxai.com`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
-      - "traefik.http.routers.frontend-http.rule=Host(`tribxai.com`) || Host(`www.tribxai.com`)"
+      - "traefik.http.routers.frontend-http.rule=Host(`app.tribxai.com`)"
       - "traefik.http.routers.frontend-http.entrypoints=web"
       - "traefik.http.routers.frontend-http.middlewares=redirect-to-https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
