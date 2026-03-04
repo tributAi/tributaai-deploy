@@ -248,7 +248,25 @@ class SSHDeployer:
         
         # 6. Pull das imagens
         print("\n📥 Fazendo pull das imagens...")
-        self.execute(f"cd {REMOTE_DIR} && docker compose -f docker-compose.production.yml pull")
+        out, err, code = self.execute(
+            f"cd {REMOTE_DIR} && docker compose -f docker-compose.production.yml pull 2>&1",
+            check=False,
+        )
+        if code != 0:
+            print("\n" + "=" * 60, file=sys.stderr)
+            print("❌ docker compose pull FALHOU", file=sys.stderr)
+            print("=" * 60, file=sys.stderr)
+            print("Saída completa do comando (stdout + stderr):", file=sys.stderr)
+            print(out or "(vazio)", file=sys.stderr)
+            if err and err != out:
+                print(err, file=sys.stderr)
+            print("=" * 60, file=sys.stderr)
+            print(
+                "Erros comuns: image not found / unauthorized → verifique se a imagem existe no GHCR e se o token tem permissão. "
+                "sophia-web (ghcr.io/eeduardoliveira/sophia-web) pode precisar de repositório público ou token com acesso.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         
         # 7. Deploy (Traefik em 80/443 + apps)
         print("\n🚀 Fazendo deploy...")
@@ -276,8 +294,10 @@ class SSHDeployer:
         print(f"   ssh {SSH_USER}@{SSH_HOST} 'cd {REMOTE_DIR} && docker compose -f docker-compose.production.yml restart <service>'")
         print()
         print("🌐 URLs (após propagação SSL):")
-        print("   https://tributaai-web.syphertech.com.br")
-        print("   https://tributaai-admin.syphertech.com.br")
+        print("   https://tribxai.com")
+        print("   https://admin.tribxai.com")
+        print("   https://sophia.tribxai.com")
+        print("   https://api.tribxai.com")
     
     def close(self):
         """Fecha conexões"""
