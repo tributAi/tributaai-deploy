@@ -3,6 +3,11 @@ name: Deploy to Production via SSH
 on:
   push:
     branches: [main]
+    paths:
+      - 'docker-compose.production.yml'
+      - 'deploy/deploy-ssh.py'
+      - '.github/workflows/deploy-ssh.yml'
+      - 'infra/postgres/migrations/**'
   workflow_dispatch:
 
 env:

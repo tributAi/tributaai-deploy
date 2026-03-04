@@ -1,5 +1,6 @@
 # Docker Compose Produção: Traefik (80/443) + TributAI
-# URLs: https://tributaai-web.syphertech.com.br | https://tributaai-admin.syphertech.com.br
+# Domínio: tribxai.com
+# URLs: https://tribxai.com | https://admin.tribxai.com | https://sophia.tribxai.com | https://api.tribxai.com | https://admin-api.tribxai.com | https://reports.tribxai.com | https://treaty.tribxai.com
 # Uso: docker compose -f docker-compose.production.yml up -d
 
 services:
@@ -105,11 +106,11 @@ services:
       LLM_SERVICE_URL: http://llm-service:8084
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.rules-admin.rule=Host(`admin-api.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.rules-admin.rule=Host(`admin-api.tribxai.com`)"
       - "traefik.http.routers.rules-admin.entrypoints=websecure"
       - "traefik.http.routers.rules-admin.tls.certresolver=letsencrypt"
       - "traefik.http.services.rules-admin.loadbalancer.server.port=8081"
-      - "traefik.http.routers.rules-admin-http.rule=Host(`admin-api.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.rules-admin-http.rule=Host(`admin-api.tribxai.com`)"
       - "traefik.http.routers.rules-admin-http.entrypoints=web"
       - "traefik.http.routers.rules-admin-http.middlewares=redirect-to-https"
     depends_on:
@@ -186,11 +187,11 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.report-service.rule=Host(`reports.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.report-service.rule=Host(`reports.tribxai.com`)"
       - "traefik.http.routers.report-service.entrypoints=websecure"
       - "traefik.http.routers.report-service.tls.certresolver=letsencrypt"
       - "traefik.http.services.report-service.loadbalancer.server.port=8086"
-      - "traefik.http.routers.report-service-http.rule=Host(`reports.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.report-service-http.rule=Host(`reports.tribxai.com`)"
       - "traefik.http.routers.report-service-http.entrypoints=web"
       - "traefik.http.routers.report-service-http.middlewares=redirect-to-https"
     depends_on:
@@ -228,13 +229,14 @@ services:
       PORT: "8080"
       DATABASE_URL: postgres://tributaai:${POSTGRES_PASSWORD:-tributaai_dev}@postgres:5432/tributaai?sslmode=disable
       ORCHESTRATOR_URL: http://orchestrator:8085
+      STRIPE_ENABLED: ${STRIPE_ENABLED:-false}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.core-api.rule=Host(`api.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.core-api.rule=Host(`api.tribxai.com`)"
       - "traefik.http.routers.core-api.entrypoints=websecure"
       - "traefik.http.routers.core-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.core-api.loadbalancer.server.port=8080"
-      - "traefik.http.routers.core-api-http.rule=Host(`api.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.core-api-http.rule=Host(`api.tribxai.com`)"
       - "traefik.http.routers.core-api-http.entrypoints=web"
       - "traefik.http.routers.core-api-http.middlewares=redirect-to-https"
     depends_on:
@@ -260,11 +262,11 @@ services:
       ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.treaty-import.rule=Host(`treaty.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.treaty-import.rule=Host(`treaty.tribxai.com`)"
       - "traefik.http.routers.treaty-import.entrypoints=websecure"
       - "traefik.http.routers.treaty-import.tls.certresolver=letsencrypt"
       - "traefik.http.services.treaty-import.loadbalancer.server.port=8087"
-      - "traefik.http.routers.treaty-import-http.rule=Host(`treaty.tributaai.syphertech.com.br`)"
+      - "traefik.http.routers.treaty-import-http.rule=Host(`treaty.tribxai.com`)"
       - "traefik.http.routers.treaty-import-http.entrypoints=web"
       - "traefik.http.routers.treaty-import-http.middlewares=redirect-to-https"
     depends_on:
@@ -285,15 +287,15 @@ services:
     environment:
       NODE_ENV: production
       # Valores em runtime só afetam server-side; o client usa os definidos no build da imagem
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.tributaai.syphertech.com.br}
-      NEXT_PUBLIC_REPORT_SERVICE_URL: ${NEXT_PUBLIC_REPORT_SERVICE_URL:-https://reports.tributaai.syphertech.com.br}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.tribxai.com}
+      NEXT_PUBLIC_REPORT_SERVICE_URL: ${NEXT_PUBLIC_REPORT_SERVICE_URL:-https://reports.tribxai.com}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`tributaai-web.syphertech.com.br`)"
+      - "traefik.http.routers.frontend.rule=Host(`tribxai.com`) || Host(`www.tribxai.com`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
-      - "traefik.http.routers.frontend-http.rule=Host(`tributaai-web.syphertech.com.br`)"
+      - "traefik.http.routers.frontend-http.rule=Host(`tribxai.com`) || Host(`www.tribxai.com`)"
       - "traefik.http.routers.frontend-http.entrypoints=web"
       - "traefik.http.routers.frontend-http.middlewares=redirect-to-https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
@@ -315,16 +317,16 @@ services:
     container_name: tributaai-admin-portal
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_ADMIN_API_BASE_URL: ${NEXT_PUBLIC_ADMIN_API_BASE_URL:-https://admin-api.tributaai.syphertech.com.br}
-      NEXT_PUBLIC_TREATY_IMPORT_URL: ${NEXT_PUBLIC_TREATY_IMPORT_URL:-https://treaty.tributaai.syphertech.com.br}
-      NEXT_PUBLIC_CORE_API_URL: ${NEXT_PUBLIC_CORE_API_URL:-https://api.tributaai.syphertech.com.br}
+      NEXT_PUBLIC_ADMIN_API_BASE_URL: ${NEXT_PUBLIC_ADMIN_API_BASE_URL:-https://admin-api.tribxai.com}
+      NEXT_PUBLIC_TREATY_IMPORT_URL: ${NEXT_PUBLIC_TREATY_IMPORT_URL:-https://treaty.tribxai.com}
+      NEXT_PUBLIC_CORE_API_URL: ${NEXT_PUBLIC_CORE_API_URL:-https://api.tribxai.com}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.admin-portal.rule=Host(`tributaai-admin.syphertech.com.br`)"
+      - "traefik.http.routers.admin-portal.rule=Host(`admin.tribxai.com`)"
       - "traefik.http.routers.admin-portal.entrypoints=websecure"
       - "traefik.http.routers.admin-portal.tls.certresolver=letsencrypt"
       - "traefik.http.services.admin-portal.loadbalancer.server.port=3001"
-      - "traefik.http.routers.admin-portal-http.rule=Host(`tributaai-admin.syphertech.com.br`)"
+      - "traefik.http.routers.admin-portal-http.rule=Host(`admin.tribxai.com`)"
       - "traefik.http.routers.admin-portal-http.entrypoints=web"
       - "traefik.http.routers.admin-portal-http.middlewares=redirect-to-https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
@@ -336,6 +338,35 @@ services:
       start_period: 40s
     depends_on:
       - rules-admin-api
+    networks:
+      - tributaai-network
+      - web
+    restart: unless-stopped
+
+  sophia-web:
+    image: ghcr.io/eeduardoliveira/sophia-web:latest
+    container_name: tributaai-sophia-web
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.tribxai.com}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sophia-web.rule=Host(`sophia.tribxai.com`)"
+      - "traefik.http.routers.sophia-web.entrypoints=websecure"
+      - "traefik.http.routers.sophia-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.sophia-web.loadbalancer.server.port=3000"
+      - "traefik.http.routers.sophia-web-http.rule=Host(`sophia.tribxai.com`)"
+      - "traefik.http.routers.sophia-web-http.entrypoints=web"
+      - "traefik.http.routers.sophia-web-http.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+    healthcheck:
+      test: [ "CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\" || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - core-api
     networks:
       - tributaai-network
       - web
