@@ -113,6 +113,7 @@ services:
       - "traefik.http.services.rules-admin.loadbalancer.server.port=8081"
       - "traefik.http.routers.rules-admin-http.rule=Host(`admin-api.tribxai.com`)"
       - "traefik.http.routers.rules-admin-http.entrypoints=web"
+      - "traefik.http.routers.rules-admin-http.priority=1"
       - "traefik.http.routers.rules-admin-http.middlewares=redirect-to-https"
     depends_on:
       postgres:
@@ -194,6 +195,7 @@ services:
       - "traefik.http.services.report-service.loadbalancer.server.port=8086"
       - "traefik.http.routers.report-service-http.rule=Host(`reports.tribxai.com`)"
       - "traefik.http.routers.report-service-http.entrypoints=web"
+      - "traefik.http.routers.report-service-http.priority=1"
       - "traefik.http.routers.report-service-http.middlewares=redirect-to-https"
     depends_on:
       postgres:
@@ -239,6 +241,7 @@ services:
       - "traefik.http.services.core-api.loadbalancer.server.port=8080"
       - "traefik.http.routers.core-api-http.rule=Host(`api.tribxai.com`)"
       - "traefik.http.routers.core-api-http.entrypoints=web"
+      - "traefik.http.routers.core-api-http.priority=1"
       - "traefik.http.routers.core-api-http.middlewares=redirect-to-https"
     depends_on:
       postgres:
@@ -269,6 +272,7 @@ services:
       - "traefik.http.services.treaty-import.loadbalancer.server.port=8087"
       - "traefik.http.routers.treaty-import-http.rule=Host(`treaty.tribxai.com`)"
       - "traefik.http.routers.treaty-import-http.entrypoints=web"
+      - "traefik.http.routers.treaty-import-http.priority=1"
       - "traefik.http.routers.treaty-import-http.middlewares=redirect-to-https"
     depends_on:
       mongodb:
@@ -293,6 +297,7 @@ services:
       - "traefik.http.services.landing.loadbalancer.server.port=3000"
       - "traefik.http.routers.landing-http.rule=Host(`tribxai.com`) || Host(`www.tribxai.com`)"
       - "traefik.http.routers.landing-http.entrypoints=web"
+      - "traefik.http.routers.landing-http.priority=1"
       - "traefik.http.routers.landing-http.middlewares=redirect-to-https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
     healthcheck:
@@ -321,6 +326,7 @@ services:
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
       - "traefik.http.routers.frontend-http.rule=Host(`app.tribxai.com`)"
       - "traefik.http.routers.frontend-http.entrypoints=web"
+      - "traefik.http.routers.frontend-http.priority=1"
       - "traefik.http.routers.frontend-http.middlewares=redirect-to-https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
     healthcheck:
@@ -352,6 +358,7 @@ services:
       - "traefik.http.services.admin-portal.loadbalancer.server.port=3001"
       - "traefik.http.routers.admin-portal-http.rule=Host(`admin.tribxai.com`)"
       - "traefik.http.routers.admin-portal-http.entrypoints=web"
+      - "traefik.http.routers.admin-portal-http.priority=1"
       - "traefik.http.routers.admin-portal-http.middlewares=redirect-to-https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
     healthcheck:
@@ -381,6 +388,7 @@ services:
       - "traefik.http.services.sophia-web.loadbalancer.server.port=3000"
       - "traefik.http.routers.sophia-web-http.rule=Host(`sophia.tribxai.com`)"
       - "traefik.http.routers.sophia-web-http.entrypoints=web"
+      - "traefik.http.routers.sophia-web-http.priority=1"
       - "traefik.http.routers.sophia-web-http.middlewares=redirect-to-https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
     healthcheck:
