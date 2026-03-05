@@ -28,3 +28,11 @@ echo ""
 
 echo "========== 6. Landing e Frontend rodando? =========="
 docker ps --format '{{.Names}}\t{{.Status}}' 2>/dev/null | grep -E 'landing|frontend|sophia' || true
+echo ""
+
+echo "========== 7. tribxai.com: container landing responde em :3000? =========="
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx tribx-landing; then
+  docker exec tribx-landing wget -qO- --timeout=3 http://127.0.0.1:3000/ 2>&1 | head -3 || echo "(wget falhou)"
+else
+  echo "Container tribx-landing nao esta rodando."
+fi

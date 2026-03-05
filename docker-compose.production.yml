@@ -289,6 +289,10 @@ services:
   landing:
     image: ghcr.io/tributai/tribx-landing:latest
     container_name: tribx-landing
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.landing.rule=Host(`tribxai.com`) || Host(`www.tribxai.com`)"
