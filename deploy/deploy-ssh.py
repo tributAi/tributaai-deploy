@@ -215,12 +215,12 @@ class SSHDeployer:
             print(f"❌ Erro: {COMPOSE_FILE} não encontrado")
             sys.exit(1)
         self.upload_file(COMPOSE_FILE, f"{REMOTE_DIR}/docker-compose.production.yml")
-        diagnose_script = "scripts/diagnose-urls.sh"
-        if os.path.exists(diagnose_script):
-            self.upload_file(diagnose_script, f"{REMOTE_DIR}/scripts/diagnose-urls.sh")
-            self.execute(f"chmod +x {REMOTE_DIR}/scripts/diagnose-urls.sh", check=False)
-        else:
-            print(f"⚠️  {diagnose_script} não encontrado; diagnóstico no servidor não disponível.")
+        for script_name in ("scripts/diagnose-urls.sh", "scripts/restart-traefik-acme.sh"):
+            if os.path.exists(script_name):
+                self.upload_file(script_name, f"{REMOTE_DIR}/{script_name}")
+                self.execute(f"chmod +x {REMOTE_DIR}/{script_name}", check=False)
+            elif script_name == "scripts/diagnose-urls.sh":
+                print(f"⚠️  {script_name} não encontrado; diagnóstico no servidor não disponível.")
         
         # 4. Criar arquivo .env
         print("\n📝 Configurando variáveis de ambiente...")
