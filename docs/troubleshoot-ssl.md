@@ -154,11 +154,34 @@ Quando o browser mostra que o certificado é **TRAEFIK DEFAULT CERT**, o Let's E
 
 ## 11. tribxai.com retorna Not Found
 
-**Configuração:** O serviço `landing` no compose responde por `Host(tribxai.com)` e `Host(www.tribxai.com)`.
+**Configuração:** O serviço `landing` no compose responde por `Host(tribxai.com)` e `Host(www.tribxai.com)`. A imagem é `ghcr.io/tributai/tribx-landing:latest`.
 
 **Checklist:**
 
 1. **DNS:** Registos **@** e **www** para tribxai.com devem apontar para o IP da VPS. Confirmar: `dig tribxai.com` e `dig www.tribxai.com`.
-2. **Container:** `docker ps | grep landing` e `docker logs tribx-landing` — o container `tribx-landing` deve estar up e sem erros.
-3. **Certificado:** Se o browser bloquear por certificado inválido (TRAEFIK DEFAULT CERT), pode mostrar erro antes do conteúdo; resolver a secção 10 primeiro.
-4. **Traefik:** Se ainda for 404, inspecionar no Traefik qual router está a ser usado para `tribxai.com` (dashboard ou logs).
+2. **Container landing:**
+   - `docker ps | grep landing` — o container `tribx-landing` deve estar **Up**.
+   - Se não estiver: `docker compose -f docker-compose.production.yml pull landing` e `docker compose -f docker-compose.production.yml up -d landing`. Se o pull falhar, a imagem pode não existir no GHCR (verificar pipeline do repo `tribx-landing`).
+   - `docker logs tribx-landing --tail 50` — sem erros de arranque (ex.: "Error: listen EADDRINUSE" ou crash).
+3. **Resposta interna:** No servidor, `docker exec tribx-landing wget -qO- http://127.0.0.1:3000/ | head -5` deve devolver HTML. Se falhar, a app dentro do container não está a servir `/`.
+4. **Certificado:** Se o browser bloquear por certificado inválido (TRAEFIK DEFAULT CERT), pode mostrar erro antes do conteúdo; resolver a secção 10 primeiro.
+5. **Traefik:** Se o container está up e responde em :3000 mas o browser continua com Not Found, inspecionar no Traefik (dashboard em :8080 ou logs) qual router está a ser usado para `tribxai.com` e se o serviço `landing` está saudável.
+
+---
+
+## 12. Admin ou Sophia: APIs não funcionam (CORS, 404, wrong URL)
+
+**Causa provável:** As apps Next.js (admin-portal, sophia-web) usam `NEXT_PUBLIC_*` para as URLs das APIs. Essas variáveis são **fixadas em build time**; o `environment` no docker-compose só tem efeito se a imagem tiver sido construída com os build-args corretos.
+
+**URLs de produção esperadas:**
+
+| App           | Variáveis (build)                                      | Valores produção                          |
+|---------------|--------------------------------------------------------|-------------------------------------------|
+| admin-portal  | NEXT_PUBLIC_ADMIN_API_BASE_URL, NEXT_PUBLIC_TREATY_IMPORT_URL, NEXT_PUBLIC_CORE_API_URL | https://admin-api.tribxai.com, https://treaty.tribxai.com, https://api.tribxai.com |
+| sophia-web    | NEXT_PUBLIC_API_URL                                    | https://api.tribxai.com                   |
+
+**O que fazer:**
+
+1. **Garantir que as imagens são construídas com as URLs de produção:** Nos repositórios `tributaai-admin-portal` e `sophia-web` (ou `sophia`), os workflows de deploy devem passar estes valores como **build-args** ao `docker build`. Definir em cada repo, em Settings → Variables, as variáveis opcionais (ex.: `NEXT_PUBLIC_ADMIN_API_BASE_URL`) se quiser override; caso contrário os workflows usam os defaults acima.
+2. **Rebuild e redeploy:** Fazer push em `main` (ou executar manualmente o workflow) em cada um dos repositórios admin-portal e sophia para gerar novas imagens com as URLs corretas. Depois, no servidor: `docker compose -f docker-compose.production.yml pull admin-portal sophia-web && docker compose -f docker-compose.production.yml up -d admin-portal sophia-web`.
+3. **CORS:** Se o browser mostrar erro de CORS ao chamar api.tribxai.com ou admin-api.tribxai.com, os backends (core-api, rules-admin-api) têm de permitir o origin do frontend (ex.: `https://admin.tribxai.com`, `https://sophia.tribxai.com`). Verificar a configuração CORS em cada serviço.
