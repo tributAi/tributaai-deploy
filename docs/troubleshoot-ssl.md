@@ -126,3 +126,39 @@ docker logs tributaai-traefik 2>&1 | grep -iE 'acme|certificate|error|tribxai' |
 ```
 
 Com isso dá para ver se o Let's Encrypt está recusando, se o domínio não resolve ou se há outro erro de configuração.
+
+---
+
+## 10. TRAEFIK DEFAULT CERT (certificado ainda não emitido)
+
+Quando o browser mostra que o certificado é **TRAEFIK DEFAULT CERT**, o Let's Encrypt ainda não emitiu (ou falhou) para esse host. O Traefik usa o cert padrão quando não tem cert válido para o domínio.
+
+**O que já está no compose:** Todos os routers HTTP (`-http`) têm `priority=1` para o desafio ACME em porta 80 ser tratado antes do redirect para HTTPS.
+
+**Passos no servidor:**
+
+1. **Confirmar deploy:** O ficheiro em uso deve ter `priority=1` em todos os routers `-http`. No servidor: `grep -c "priority=1" docker-compose.production.yml` (deve bater com o número de serviços com HTTP redirect).
+
+2. **Reiniciar Traefik** para recarregar a config e tentar de novo o ACME:
+   ```bash
+   cd /opt/tributaai
+   docker compose -f docker-compose.production.yml up -d traefik
+   ```
+   Ou use o script: `bash scripts/restart-traefik-acme.sh`
+
+3. **Ver logs ACME:** `docker logs tributaai-traefik 2>&1 | grep -iE 'acme|certificate|error'`. Se aparecer "Invalid response... 500" ou "NXDOMAIN", tratar DNS e prioridade primeiro.
+
+4. **Forçar re-emissão (só se necessário):** Se o estado ACME estiver corrompido, no servidor: parar Traefik, fazer backup e esvaziar/remover o ficheiro `acme.json` no volume do Traefik (`traefik_letsencrypt`), depois arrancar de novo. **Atenção:** invalida certificados existentes; re-emitir todos.
+
+---
+
+## 11. tribxai.com retorna Not Found
+
+**Configuração:** O serviço `landing` no compose responde por `Host(tribxai.com)` e `Host(www.tribxai.com)`.
+
+**Checklist:**
+
+1. **DNS:** Registos **@** e **www** para tribxai.com devem apontar para o IP da VPS. Confirmar: `dig tribxai.com` e `dig www.tribxai.com`.
+2. **Container:** `docker ps | grep landing` e `docker logs tribx-landing` — o container `tribx-landing` deve estar up e sem erros.
+3. **Certificado:** Se o browser bloquear por certificado inválido (TRAEFIK DEFAULT CERT), pode mostrar erro antes do conteúdo; resolver a secção 10 primeiro.
+4. **Traefik:** Se ainda for 404, inspecionar no Traefik qual router está a ser usado para `tribxai.com` (dashboard ou logs).
